@@ -915,6 +915,11 @@ def render_config_page(
   <div class="container">
     <h2>📈 A/H股分析</h2>
     
+    <nav class="settings-nav" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #e2e8f0;">
+      <a href="/" style="color: white; background: #2563eb; padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none;">📈 首页</a>
+      <a href="/settings" style="color: #64748b; padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none;">⚙️ 设置</a>
+    </nav>
+    
     <!-- 快速分析区域 -->
     <div class="analysis-section" style="margin-top: 0; padding-top: 0; border-top: none;">
       <div class="form-group" style="margin-bottom: 0.75rem;">
@@ -1000,5 +1005,435 @@ def render_error_page(
     page = render_base(
         title=f"错误 {status_code}",
         content=content
+    )
+    return page.encode("utf-8")
+
+
+# ============================================================
+# 设置页面模板
+# ============================================================
+
+SETTINGS_CSS = """
+.settings-container {
+    max-width: 800px;
+}
+
+.settings-nav {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.settings-nav a {
+    color: var(--text-light);
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+}
+
+.settings-nav a:hover {
+    background: var(--bg);
+    color: var(--primary);
+}
+
+.settings-nav a.active {
+    background: var(--primary);
+    color: white;
+}
+
+.settings-section {
+    background: var(--bg);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.settings-section h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.1rem;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+@media (max-width: 600px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-group .hint {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 0.25rem;
+}
+
+.toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: white;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+}
+
+.toggle-switch {
+    position: relative;
+    width: 48px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: var(--success);
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+}
+
+.toggle-label {
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.btn-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.btn-group button {
+    flex: 1;
+}
+
+.btn-test {
+    background: var(--text-light);
+}
+
+.btn-test:hover {
+    background: var(--text);
+}
+
+.next-run-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: #eff6ff;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--primary);
+    margin-top: 1rem;
+}
+
+.password-input {
+    position: relative;
+}
+
+.password-input input {
+    padding-right: 3rem;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-light);
+    padding: 0.25rem;
+    width: auto;
+}
+
+.password-toggle:hover {
+    color: var(--text);
+    background: none;
+    transform: translateY(-50%);
+}
+"""
+
+
+def render_settings_page(
+    settings: dict,
+    message: Optional[str] = None,
+    message_type: str = 'success'
+) -> bytes:
+    """
+    渲染设置页面
+    
+    Args:
+        settings: 设置字典
+        message: 可选的提示消息
+        message_type: 消息类型 (success, error, warning)
+    """
+    toast_html = render_toast(message, message_type) if message else ""
+    
+    # 安全转义
+    def safe(value):
+        return html.escape(str(value)) if value else ''
+    
+    content = f"""
+  <div class="container settings-container">
+    <h2>⚙️ 系统设置</h2>
+    
+    <nav class="settings-nav">
+      <a href="/">📈 首页</a>
+      <a href="/settings" class="active">⚙️ 设置</a>
+    </nav>
+    
+    <!-- API Keys 配置 -->
+    <div class="settings-section">
+      <h3>🔑 API Keys 配置</h3>
+      <form method="post" action="/settings/api-keys">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Gemini API Key</label>
+            <input type="password" name="gemini_api_key" 
+                   value="{safe(settings.get('gemini_api_key_raw', ''))}"
+                   placeholder="AIza..." autocomplete="off" />
+            <p class="hint">从 aistudio.google.com 获取</p>
+          </div>
+          <div class="form-group">
+            <label>Gemini 模型</label>
+            <input type="text" name="gemini_model" 
+                   value="{safe(settings.get('gemini_model', 'gemini-3-flash-preview'))}"
+                   placeholder="gemini-3-flash-preview" />
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label>OpenAI API Key (可选)</label>
+            <input type="password" name="openai_api_key" 
+                   value="{safe(settings.get('openai_api_key_raw', ''))}"
+                   placeholder="sk-..." autocomplete="off" />
+            <p class="hint">支持 OpenAI 兼容 API</p>
+          </div>
+          <div class="form-group">
+            <label>OpenAI Base URL</label>
+            <input type="text" name="openai_base_url" 
+                   value="{safe(settings.get('openai_base_url', ''))}"
+                   placeholder="https://api.openai.com/v1" />
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label>DeepSeek API Key</label>
+            <input type="password" name="deepseek_api_key" 
+                   value="{safe(settings.get('deepseek_api_key_raw', ''))}"
+                   placeholder="sk-..." autocomplete="off" />
+            <p class="hint">从 platform.deepseek.com 获取</p>
+          </div>
+          <div class="form-group">
+            <label>智谱 AI API Key</label>
+            <input type="password" name="zhipu_api_key" 
+                   value="{safe(settings.get('zhipu_api_key_raw', ''))}"
+                   placeholder="..." autocomplete="off" />
+            <p class="hint">从 open.bigmodel.cn 获取</p>
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tavily API Keys</label>
+            <input type="password" name="tavily_api_keys" 
+                   value="{safe(settings.get('tavily_api_keys_raw', ''))}"
+                   placeholder="tvly-..." autocomplete="off" />
+            <p class="hint">新闻搜索，多个用逗号分隔</p>
+          </div>
+          <div class="form-group">
+            <label>SerpAPI Keys</label>
+            <input type="password" name="serpapi_keys" 
+                   value="{safe(settings.get('serpapi_keys_raw', ''))}"
+                   placeholder="..." autocomplete="off" />
+            <p class="hint">备用搜索引擎</p>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>Tushare Token (可选)</label>
+          <input type="password" name="tushare_token" 
+                 value="{safe(settings.get('tushare_token_raw', ''))}"
+                 placeholder="..." autocomplete="off" />
+          <p class="hint">从 tushare.pro 获取</p>
+        </div>
+        
+        <button type="submit">💾 保存 API Keys</button>
+      </form>
+    </div>
+    
+    <!-- 自选股配置 -->
+    <div class="settings-section">
+      <h3>📋 自选股配置</h3>
+      <form method="post" action="/settings/stocks">
+        <div class="form-group">
+          <label>自选股列表</label>
+          <textarea name="stock_list" rows="3" 
+                    placeholder="600519, 000001, 300750">{safe(settings.get('stock_list', ''))}</textarea>
+          <p class="hint">支持 A股(6位数字)、港股(hk+5位)、美股(字母)，逗号或换行分隔</p>
+        </div>
+        <button type="submit">💾 保存自选股</button>
+      </form>
+    </div>
+    
+    <!-- 邮件推送配置 -->
+    <div class="settings-section">
+      <h3>📧 邮件推送配置</h3>
+      <form method="post" action="/settings/email" id="email-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>发件人邮箱</label>
+            <input type="email" name="email_sender" 
+                   value="{safe(settings.get('email_sender', ''))}"
+                   placeholder="your@qq.com" />
+          </div>
+          <div class="form-group">
+            <label>邮箱密码/授权码</label>
+            <input type="password" name="email_password" 
+                   value="{safe(settings.get('email_password_raw', ''))}"
+                   placeholder="授权码" autocomplete="off" />
+            <p class="hint">QQ邮箱需使用授权码</p>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>收件人邮箱</label>
+          <input type="text" name="email_receivers" 
+                 value="{safe(settings.get('email_receivers', ''))}"
+                 placeholder="receiver@example.com" />
+          <p class="hint">多个收件人用逗号分隔，留空则发给自己</p>
+        </div>
+        <div class="btn-group">
+          <button type="submit">💾 保存邮件配置</button>
+          <button type="button" class="btn-test" onclick="testEmail()">📤 测试发送</button>
+        </div>
+      </form>
+    </div>
+    
+    <!-- 定时任务配置 -->
+    <div class="settings-section">
+      <h3>⏰ 定时任务配置</h3>
+      <form method="post" action="/settings/schedule">
+        <div class="toggle-group">
+          <label class="toggle-switch">
+            <input type="checkbox" name="schedule_enabled" value="true"
+                   {'checked' if settings.get('schedule_enabled') else ''} />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">启用定时任务</span>
+        </div>
+        
+        <div class="form-group" style="margin-top: 1rem;">
+          <label>执行时间</label>
+          <input type="text" name="schedule_time" 
+                 value="{safe(settings.get('schedule_time', '09:30,15:30,18:00'))}"
+                 placeholder="09:30,15:30,18:00" />
+          <p class="hint">多个时间点用逗号分隔，格式 HH:MM</p>
+        </div>
+        
+        <div class="toggle-group">
+          <label class="toggle-switch">
+            <input type="checkbox" name="market_review_enabled" value="true"
+                   {'checked' if settings.get('market_review_enabled') else ''} />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">启用大盘复盘</span>
+        </div>
+        
+        <div class="next-run-info">
+          <span>📅</span>
+          <span>下次执行: {safe(settings.get('next_run_time', '-'))}</span>
+        </div>
+        
+        <button type="submit" style="margin-top: 1rem;">💾 保存定时任务配置</button>
+      </form>
+    </div>
+    
+    <div class="footer">
+      <p>配置保存后立即生效，无需重启服务</p>
+    </div>
+  </div>
+  
+  {toast_html}
+  
+  <script>
+  function testEmail() {{
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '发送中...';
+    
+    fetch('/settings/test-email', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}}
+    }})
+    .then(r => r.json())
+    .then(data => {{
+      alert(data.message);
+    }})
+    .catch(e => {{
+      alert('请求失败: ' + e.message);
+    }})
+    .finally(() => {{
+      btn.disabled = false;
+      btn.textContent = '📤 测试发送';
+    }});
+  }}
+  </script>
+"""
+    
+    page = render_base(
+        title="系统设置 | A股分析",
+        content=content,
+        extra_css=SETTINGS_CSS
     )
     return page.encode("utf-8")

@@ -12,9 +12,31 @@ A股自选股智能分析系统 - 配置管理模块
 
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 from dotenv import load_dotenv, dotenv_values
 from dataclasses import dataclass, field
+
+# 配置键到属性名的映射
+CONFIG_KEY_MAP = {
+    'stock_list': 'stock_list',
+    'gemini_api_key': 'gemini_api_key',
+    'gemini_model': 'gemini_model',
+    'gemini_model_fallback': 'gemini_model_fallback',
+    'gemini_temperature': 'gemini_temperature',
+    'openai_api_key': 'openai_api_key',
+    'openai_base_url': 'openai_base_url',
+    'openai_model': 'openai_model',
+    'tushare_token': 'tushare_token',
+    'tavily_api_keys': 'tavily_api_keys',
+    'serpapi_keys': 'serpapi_keys',
+    'bocha_api_keys': 'bocha_api_keys',
+    'email_sender': 'email_sender',
+    'email_password': 'email_password',
+    'email_receivers': 'email_receivers',
+    'schedule_enabled': 'schedule_enabled',
+    'schedule_time': 'schedule_time',
+    'market_review_enabled': 'market_review_enabled',
+}
 
 
 @dataclass
@@ -211,14 +233,49 @@ class Config:
         从 .env 文件加载配置
         
         加载优先级：
-        1. 系统环境变量
-        2. .env 文件
+        1. 数据库配置（ConfigStore）
+        2. .env 文件 / 系统环境变量
         3. 代码中的默认值
         """
         # 加载项目根目录下的 .env 文件
         # src/config.py -> src/ -> root
         env_path = Path(__file__).parent.parent / '.env'
         load_dotenv(dotenv_path=env_path)
+        
+        # 尝试从数据库加载配置
+        db_configs = cls._load_from_db()
+        
+        def get_value(key: str, env_key: str, default: str = '') -> str:
+            """获取配置值，优先数据库，其次环境变量"""
+            if key in db_configs and db_configs[key]:
+                return db_configs[key]
+            return os.getenv(env_key, default)
+        
+        def get_list(key: str, env_key: str) -> List[str]:
+            """获取列表配置"""
+            value = get_value(key, env_key, '')
+            return [v.strip() for v in value.split(',') if v.strip()]
+        
+        def get_bool(key: str, env_key: str, default: bool = False) -> bool:
+            """获取布尔配置"""
+            value = get_value(key, env_key, str(default).lower())
+            return value.lower() == 'true'
+        
+        def get_float(key: str, env_key: str, default: float) -> float:
+            """获取浮点数配置"""
+            value = get_value(key, env_key, str(default))
+            try:
+                return float(value)
+            except ValueError:
+                return default
+        
+        def get_int(key: str, env_key: str, default: int) -> int:
+            """获取整数配置"""
+            value = get_value(key, env_key, str(default))
+            try:
+                return int(value)
+            except ValueError:
+                return default
 
         # === 智能代理配置 (关键修复) ===
         # 如果配置了代理，自动设置 NO_PROXY 以排除国内数据源，避免行情获取失败
@@ -263,43 +320,33 @@ class Config:
 
         
         # 解析自选股列表（逗号分隔）
-        stock_list_str = os.getenv('STOCK_LIST', '')
-        stock_list = [
-            code.strip() 
-            for code in stock_list_str.split(',') 
-            if code.strip()
-        ]
+        stock_list = get_list('stock_list', 'STOCK_LIST')
         
         # 如果没有配置，使用默认的示例股票
         if not stock_list:
             stock_list = ['600519', '000001', '300750']
         
         # 解析搜索引擎 API Keys（支持多个 key，逗号分隔）
-        bocha_keys_str = os.getenv('BOCHA_API_KEYS', '')
-        bocha_api_keys = [k.strip() for k in bocha_keys_str.split(',') if k.strip()]
-        
-        tavily_keys_str = os.getenv('TAVILY_API_KEYS', '')
-        tavily_api_keys = [k.strip() for k in tavily_keys_str.split(',') if k.strip()]
-        
-        serpapi_keys_str = os.getenv('SERPAPI_API_KEYS', '')
-        serpapi_keys = [k.strip() for k in serpapi_keys_str.split(',') if k.strip()]
+        bocha_api_keys = get_list('bocha_api_keys', 'BOCHA_API_KEYS')
+        tavily_api_keys = get_list('tavily_api_keys', 'TAVILY_API_KEYS')
+        serpapi_keys = get_list('serpapi_keys', 'SERPAPI_API_KEYS')
         
         return cls(
             stock_list=stock_list,
             feishu_app_id=os.getenv('FEISHU_APP_ID'),
             feishu_app_secret=os.getenv('FEISHU_APP_SECRET'),
             feishu_folder_token=os.getenv('FEISHU_FOLDER_TOKEN'),
-            tushare_token=os.getenv('TUSHARE_TOKEN'),
-            gemini_api_key=os.getenv('GEMINI_API_KEY'),
-            gemini_model=os.getenv('GEMINI_MODEL', 'gemini-3-flash-preview'),
-            gemini_model_fallback=os.getenv('GEMINI_MODEL_FALLBACK', 'gemini-2.5-flash'),
-            gemini_temperature=float(os.getenv('GEMINI_TEMPERATURE', '0.7')),
+            tushare_token=get_value('tushare_token', 'TUSHARE_TOKEN'),
+            gemini_api_key=get_value('gemini_api_key', 'GEMINI_API_KEY'),
+            gemini_model=get_value('gemini_model', 'GEMINI_MODEL', 'gemini-3-flash-preview'),
+            gemini_model_fallback=get_value('gemini_model_fallback', 'GEMINI_MODEL_FALLBACK', 'gemini-2.5-flash'),
+            gemini_temperature=get_float('gemini_temperature', 'GEMINI_TEMPERATURE', 0.7),
             gemini_request_delay=float(os.getenv('GEMINI_REQUEST_DELAY', '2.0')),
             gemini_max_retries=int(os.getenv('GEMINI_MAX_RETRIES', '5')),
             gemini_retry_delay=float(os.getenv('GEMINI_RETRY_DELAY', '5.0')),
-            openai_api_key=os.getenv('OPENAI_API_KEY'),
-            openai_base_url=os.getenv('OPENAI_BASE_URL'),
-            openai_model=os.getenv('OPENAI_MODEL', 'gpt-4o-mini'),
+            openai_api_key=get_value('openai_api_key', 'OPENAI_API_KEY'),
+            openai_base_url=get_value('openai_base_url', 'OPENAI_BASE_URL'),
+            openai_model=get_value('openai_model', 'OPENAI_MODEL', 'gpt-4o-mini'),
             openai_temperature=float(os.getenv('OPENAI_TEMPERATURE', '0.7')),
             bocha_api_keys=bocha_api_keys,
             tavily_api_keys=tavily_api_keys,
@@ -308,9 +355,9 @@ class Config:
             feishu_webhook_url=os.getenv('FEISHU_WEBHOOK_URL'),
             telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN'),
             telegram_chat_id=os.getenv('TELEGRAM_CHAT_ID'),
-            email_sender=os.getenv('EMAIL_SENDER'),
-            email_password=os.getenv('EMAIL_PASSWORD'),
-            email_receivers=[r.strip() for r in os.getenv('EMAIL_RECEIVERS', '').split(',') if r.strip()],
+            email_sender=get_value('email_sender', 'EMAIL_SENDER'),
+            email_password=get_value('email_password', 'EMAIL_PASSWORD'),
+            email_receivers=get_list('email_receivers', 'EMAIL_RECEIVERS'),
             pushover_user_key=os.getenv('PUSHOVER_USER_KEY'),
             pushover_api_token=os.getenv('PUSHOVER_API_TOKEN'),
             pushplus_token=os.getenv('PUSHPLUS_TOKEN'),
@@ -331,9 +378,9 @@ class Config:
             debug=os.getenv('DEBUG', 'false').lower() == 'true',
             http_proxy=os.getenv('HTTP_PROXY'),
             https_proxy=os.getenv('HTTPS_PROXY'),
-            schedule_enabled=os.getenv('SCHEDULE_ENABLED', 'false').lower() == 'true',
-            schedule_time=os.getenv('SCHEDULE_TIME', '18:00'),
-            market_review_enabled=os.getenv('MARKET_REVIEW_ENABLED', 'true').lower() == 'true',
+            schedule_enabled=get_bool('schedule_enabled', 'SCHEDULE_ENABLED', False),
+            schedule_time=get_value('schedule_time', 'SCHEDULE_TIME', '18:00'),
+            market_review_enabled=get_bool('market_review_enabled', 'MARKET_REVIEW_ENABLED', True),
             webui_enabled=os.getenv('WEBUI_ENABLED', 'false').lower() == 'true',
             webui_host=os.getenv('WEBUI_HOST', '127.0.0.1'),
             webui_port=int(os.getenv('WEBUI_PORT', '8000')),
@@ -375,6 +422,39 @@ class Config:
     def reset_instance(cls) -> None:
         """重置单例（主要用于测试）"""
         cls._instance = None
+    
+    @classmethod
+    def _load_from_db(cls) -> Dict[str, str]:
+        """
+        从数据库加载配置
+        
+        Returns:
+            配置字典 {key: value}
+        """
+        try:
+            from src.config_store import get_config_store
+            store = get_config_store()
+            return store.get_all()
+        except Exception as e:
+            # 数据库不可用时静默失败，回退到 .env
+            import logging
+            logging.getLogger(__name__).debug(f"从数据库加载配置失败，使用 .env: {e}")
+            return {}
+    
+    def reload(self) -> None:
+        """
+        重新加载配置（运行时刷新）
+        
+        从数据库和 .env 重新加载所有配置
+        """
+        cls = self.__class__
+        new_config = cls._load_from_env()
+        
+        # 更新当前实例的所有属性
+        for field_name in self.__dataclass_fields__:
+            if field_name.startswith('_'):
+                continue
+            setattr(self, field_name, getattr(new_config, field_name))
 
     def refresh_stock_list(self) -> None:
         """

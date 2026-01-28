@@ -49,6 +49,54 @@ Base = declarative_base()
 
 # === 数据模型定义 ===
 
+class SystemSetting(Base):
+    """
+    系统配置表
+    
+    存储用户通过 WebUI 配置的系统设置，支持敏感字段加密存储。
+    配置加载优先级：数据库 > .env 文件 > 代码默认值
+    """
+    __tablename__ = 'system_settings'
+    
+    # 主键
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # 配置键（唯一索引）
+    key = Column(String(100), nullable=False, unique=True, index=True)
+    
+    # 配置值（敏感字段加密存储）
+    value = Column(String, nullable=True)
+    
+    # 是否加密
+    is_encrypted = Column(Integer, default=0)  # 0=False, 1=True (SQLite 兼容)
+    
+    # 分类：api_keys, email, schedule, stocks, general
+    category = Column(String(50), default='general')
+    
+    # 配置描述
+    description = Column(String(255), nullable=True)
+    
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def __repr__(self):
+        return f"<SystemSetting(key={self.key}, category={self.category})>"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            'id': self.id,
+            'key': self.key,
+            'value': self.value,
+            'is_encrypted': bool(self.is_encrypted),
+            'category': self.category,
+            'description': self.description,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class StockDaily(Base):
     """
     股票日线数据模型

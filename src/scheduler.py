@@ -58,7 +58,7 @@ class Scheduler:
     定时任务调度器
     
     基于 schedule 库实现，支持：
-    - 每日定时执行
+    - 每日定时执行（支持多个时间点）
     - 启动时立即执行
     - 优雅退出
     """
@@ -68,7 +68,7 @@ class Scheduler:
         初始化调度器
         
         Args:
-            schedule_time: 每日执行时间，格式 "HH:MM"
+            schedule_time: 每日执行时间，格式 "HH:MM" 或 "HH:MM,HH:MM,HH:MM"（多个时间点用逗号分隔）
         """
         try:
             import schedule
@@ -77,7 +77,8 @@ class Scheduler:
             logger.error("schedule 库未安装，请执行: pip install schedule")
             raise ImportError("请安装 schedule 库: pip install schedule")
         
-        self.schedule_time = schedule_time
+        # 支持多个时间点，用逗号分隔
+        self.schedule_times = [t.strip() for t in schedule_time.split(',')]
         self.shutdown_handler = GracefulShutdown()
         self._task_callback: Optional[Callable] = None
         self._running = False
@@ -92,9 +93,13 @@ class Scheduler:
         """
         self._task_callback = task
         
-        # 设置每日定时任务
-        self.schedule.every().day.at(self.schedule_time).do(self._safe_run_task)
-        logger.info(f"已设置每日定时任务，执行时间: {self.schedule_time}")
+        # 为每个时间点设置定时任务
+        for schedule_time in self.schedule_times:
+            self.schedule.every().day.at(schedule_time).do(self._safe_run_task)
+            logger.info(f"已设置每日定时任务，执行时间: {schedule_time}")
+        
+        if len(self.schedule_times) > 1:
+            logger.info(f"共设置 {len(self.schedule_times)} 个时间点: {', '.join(self.schedule_times)}")
         
         if run_immediately:
             logger.info("立即执行一次任务...")

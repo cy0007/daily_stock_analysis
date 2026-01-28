@@ -21,6 +21,7 @@ from web.handlers import (
     Response, HtmlResponse, JsonResponse,
     get_page_handler, get_api_handler, get_bot_handler
 )
+from web.settings_handler import get_settings_handler
 from web.templates import render_error_page
 
 if TYPE_CHECKING:
@@ -283,6 +284,7 @@ def create_default_router() -> Router:
     # 获取处理器
     page_handler = get_page_handler()
     api_handler = get_api_handler()
+    settings_handler = get_settings_handler()
     
     # === 页面路由 ===
     router.register(
@@ -295,6 +297,43 @@ def create_default_router() -> Router:
         "/update", "POST",
         lambda form: page_handler.handle_update(form),
         "更新配置"
+    )
+    
+    # === 设置页面路由 ===
+    router.register(
+        "/settings", "GET",
+        lambda q: settings_handler.handle_settings_page(q),
+        "设置页面"
+    )
+    
+    router.register(
+        "/settings/api-keys", "POST",
+        lambda form: settings_handler.handle_save_api_keys(form),
+        "保存 API Keys"
+    )
+    
+    router.register(
+        "/settings/stocks", "POST",
+        lambda form: settings_handler.handle_save_stocks(form),
+        "保存自选股"
+    )
+    
+    router.register(
+        "/settings/email", "POST",
+        lambda form: settings_handler.handle_save_email(form),
+        "保存邮件配置"
+    )
+    
+    router.register(
+        "/settings/schedule", "POST",
+        lambda form: settings_handler.handle_save_schedule(form),
+        "保存定时任务配置"
+    )
+    
+    router.register(
+        "/settings/test-email", "POST",
+        lambda form: settings_handler.handle_test_email(form),
+        "测试邮件发送"
     )
     
     # === API 路由 ===
